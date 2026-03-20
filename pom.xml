@@ -29,10 +29,16 @@
         <imchat.flyway.host>127.0.0.1</imchat.flyway.host>
         <imchat.flyway.port>3306</imchat.flyway.port>
         <imchat.flyway.name>simple_chat</imchat.flyway.name>
+        <!-- Security-pinned versions that still remain compatible with Java 8. -->
+        <spring-framework.version>5.3.39</spring-framework.version>
+        <spring-security.version>5.8.16</spring-security.version>
+        <tomcat.version>9.0.115</tomcat.version>
+        <snakeyaml.version>2.6</snakeyaml.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <jjwt.version>0.11.5</jjwt.version>
         <hutool.version>5.8.25</hutool.version>
-        <netty.version>4.1.107.Final</netty.version>
+        <mysql.version>8.4.0</mysql.version>
+        <netty.version>4.1.131.Final</netty.version>
         <commons-email.version>1.5</commons-email.version>
     </properties>
 
