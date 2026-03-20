@@ -38,7 +38,7 @@
         <jjwt.version>0.11.5</jjwt.version>
         <hutool.version>5.8.25</hutool.version>
         <mysql.version>8.4.0</mysql.version>
-        <netty.version>4.1.131.Final</netty.version>
+        <netty.version>4.2.10.Final</netty.version>
         <commons-email.version>1.5</commons-email.version>
     </properties>
 
