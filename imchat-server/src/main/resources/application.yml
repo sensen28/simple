@@ -1,0 +1,80 @@
+# 服务配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# Spring配置
+spring:
+  application:
+    name: imchat-server
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/imchat?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
+    username: root
+    password: root
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      minimum-idle: 5
+      idle-timeout: 600000
+      maximum-pool-size: 10
+      auto-commit: true
+      pool-name: HikariCP
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+      timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
+  # Jackson配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.wjh.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: is_deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# JWT配置
+jwt:
+  secret: imchat-secret-key-20240320-abcdefghijklmnopqrstuvwxyz
+  expiration: 7200000 # 2小时，单位毫秒
+  refresh-expiration: 604800000 # 7天，单位毫秒
+
+# Netty配置
+netty:
+  port: 9000
+  websocket-path: /ws
+  boss-threads: 1
+  worker-threads: 4
+
+# 项目自定义配置
+imchat:
+  # 验证码有效期（分钟）
+  captcha-expire: 5
+  # 文件上传路径
+  upload-path: ./upload/
+  # 静态资源访问路径
+  static-path: /static/**
