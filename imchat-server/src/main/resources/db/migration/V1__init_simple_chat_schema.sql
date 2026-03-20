@@ -1,9 +1,3 @@
--- 创建数据库
-CREATE DATABASE IF NOT EXISTS imchat DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE imchat;
-
--- 用户表
 CREATE TABLE IF NOT EXISTS `user` (
     `id` bigint NOT NULL COMMENT '用户ID',
     `username` varchar(32) NOT NULL COMMENT '用户名',
@@ -11,14 +5,13 @@ CREATE TABLE IF NOT EXISTS `user` (
     `avatar` varchar(255) DEFAULT '' COMMENT '头像',
     `nickname` varchar(32) DEFAULT '' COMMENT '昵称',
     `signature` varchar(255) DEFAULT '' COMMENT '个性签名',
-    `status` tinyint DEFAULT 1 COMMENT '用户状态：0-离线，1-在线，2-隐身',
+    `status` tinyint DEFAULT 0 COMMENT '用户状态：0-离线，1-在线，2-隐身',
     `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
--- 好友关系表
 CREATE TABLE IF NOT EXISTS `friend` (
     `id` bigint NOT NULL COMMENT '主键ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',
@@ -33,7 +26,6 @@ CREATE TABLE IF NOT EXISTS `friend` (
     KEY `idx_friend_id` (`friend_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='好友关系表';
 
--- 好友申请表
 CREATE TABLE IF NOT EXISTS `friend_apply` (
     `id` bigint NOT NULL COMMENT '主键ID',
     `apply_user_id` bigint NOT NULL COMMENT '申请人ID',
@@ -47,7 +39,6 @@ CREATE TABLE IF NOT EXISTS `friend_apply` (
     KEY `idx_apply_user_id` (`apply_user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='好友申请表';
 
--- 消息表
 CREATE TABLE IF NOT EXISTS `message` (
     `id` bigint NOT NULL COMMENT '消息ID',
     `from_user_id` bigint NOT NULL COMMENT '发送者ID',

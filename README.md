@@ -1,91 +1,244 @@
-# IMChat - 基于Netty的即时聊天项目
+# IMChat 2.0
 
-基于netty的即时聊天项目
-网络协议：TCP/IP
-代码量：约2100行
-消息封装：JSON
+<div align="right">
+  <strong>简体中文</strong> | <a href="./README_EN.md">English</a>
+</div>
 
-## 项目结构
-```
-imchat
-├── imchat-common    # 公共模块，存放客户端和服务端共享的代码
-├── imchat-client   # 聊天客户端（Swing + Netty）
-└── imchat-server   # 聊天服务端（Netty + MySQL）
-```
+## 项目简介
+
+IMChat 2.0 是一个基于 OpenJDK 8 的即时通讯示例项目，当前包含：
+
+- `imchat-server`：Spring Boot + Netty 的服务端
+- `imchat-common`：服务端与客户端共享的协议/DTO/VO/工具
+- `imchat-electron-client`：Electron 桌面客户端（替代旧 Swing 客户端）
+
+> 说明：`backup` 目录为历史备份代码，不参与当前版本构建与运行。
 
 ## 技术栈
-- **网络通信**: Netty 4.1.x
-- **序列化**: Jackson 2.15.x
-- **数据库**: MySQL 8.x
-- **连接池**: C3P0 0.9.5.x
-- **日志**: Log4j 1.2.x
-- **邮件**: Apache Commons Email 1.5
-- **JDK版本**: 1.8+
 
-## 功能点介绍
+- OpenJDK 8
+- Spring Boot 2.7.x
+- Spring Security + JWT
+- MyBatis-Plus
+- Netty WebSocket
+- MySQL 8.x
+- Redis 6.x
+- Electron
 
-主要开发的功能模块：用户账号模块、聊天模块、文件传输模块
+## 已实现功能
 
-### 1、用户模块
-- 1.1、用户登录模块
-- 1.2、用户的注册模块
-- 1.3、忘记密码
-- 1.4、修改密码
-### 2、聊天模块
-- 2.1、单聊（一对一聊天）
-- 2.2、群聊
-- 2.3、好友列表
-- 2.4、好友上下线通知
-### 3、文件传输
-- 3.1、指定用户发送文件
-- 3.2、群发文件
+### 1. 用户认证
+
+- 图形验证码
+- 注册/登录
+- JWT 鉴权
+
+### 2. 好友系统
+
+- 按用户名/昵称搜索用户
+- 发起好友申请
+- 查看待处理申请
+- 同意/拒绝申请
+- 好友列表
+- 删除好友
+- 拉黑/取消拉黑
+- 免打扰设置
+
+### 3. 消息模块
+
+- 单聊实时消息（WebSocket）
+- 离线消息补推（用户连接后）
+- 历史消息分页
+- 最近会话摘要
+- 消息已读（会话已读 + 单条 ACK）
+
+### 4. Electron 客户端
+
+- 验证码登录
+- 好友搜索与申请处理
+- 好友列表与会话列表
+- 消息实时收发
+- 历史消息查看
+
+## 项目结构
+
+```text
+simple
+├── database
+│   └── mysql
+│       └── simple_chat.sql
+├── imchat-common
+├── imchat-server
+│   └── src/main/resources/db/migration
+│       └── V1__init_simple_chat_schema.sql
+├── imchat-electron-client
+├── docs
+│   └── integration-test.md
+├── scripts
+│   └── encrypt-config.ps1
+└── backup
+```
+
+## 环境要求
+
+- OpenJDK 8（必须）
+- Maven 3.6+
+- Node.js 18+
+- MySQL 8.x
+- Redis 6.x（可选，本地开发缺失时验证码会回退到内存）
 
 ## 快速开始
 
-### 1. 环境准备
-- JDK 1.8+
-- Maven 3.6+
-- MySQL 8.0+
+### 1. 初始化数据库
 
-### 2. 数据库初始化
-创建数据库并执行SQL脚本：
-```sql
-CREATE DATABASE imchat;
-USE imchat;
+先创建数据库：
 
--- 用户表
-CREATE TABLE user (
-    username VARCHAR(255) PRIMARY KEY,
-    password VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    ip VARCHAR(255),
-    status INT DEFAULT 0
-);
-
--- 消息表
-CREATE TABLE message (
-    sender VARCHAR(255) NOT NULL,
-    receiver VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    status INT DEFAULT 0,
-    allName VARCHAR(255)
-);
-```
-
-### 3. 配置数据库
-修改 `imchat-server/src/main/resources/c3p0-config.xml` 中的数据库连接信息。
-
-### 4. 编译打包
 ```bash
-mvn clean package
+mysql -u your_db_user -p < database/mysql/simple_chat.sql
 ```
 
-### 5. 运行
-- 先启动服务端：
-```bash
-java -jar imchat-server/target/imchat-server-1.0.0-SNAPSHOT.jar
+然后由 Flyway 在服务端启动时自动执行迁移脚本：
+
+```text
+imchat-server/src/main/resources/db/migration
 ```
-- 再启动客户端：
-```bash
-java -jar imchat-client/target/imchat-client-1.0.0-SNAPSHOT.jar
+
+当前首个迁移文件：
+
+```text
+V1__init_simple_chat_schema.sql
 ```
+
+演示账号种子迁移：
+
+```text
+V2__seed_demo_users.sql
+```
+
+### 2. 配置服务端
+
+修改配置文件：
+
+```text
+imchat-server/src/main/resources/application.yml
+```
+
+当前默认数据库名已切换为 `simple_chat`。
+
+数据库结构现在由 Flyway 管理：
+
+- `database/mysql/simple_chat.sql` 只负责创建数据库
+- 表结构和后续字段变更统一放到 `db/migration` 目录
+- 后续升级请新增 `V2__...sql`、`V3__...sql`，不要再手改线上库结构
+
+Flyway 会自动插入两个演示账号：
+
+- 用户名：`demo_alice`
+- 用户名：`demo_bob`
+- 默认密码：`Demo@123456`
+
+说明：
+
+- 演示账号仅用于本地开发与联调
+- 如不需要，可在后续迁移中删除或覆盖
+
+仓库中的 `application.yml` 只保留示例密文，不再保存真实数据库账号、数据库密码和 JWT 密钥。
+
+推荐做法：真实敏感信息全部通过本机环境变量注入，不提交到 GitHub：
+
+```powershell
+$env:SPRING_DATASOURCE_USERNAME="your_db_user"
+$env:SPRING_DATASOURCE_PASSWORD="your_db_password"
+$env:JWT_SECRET="replace-with-your-own-jwt-secret-at-least-32-chars"
+```
+
+如需调整数据库主机、端口或库名，也可以额外设置：
+
+```powershell
+$env:IMCHAT_DB_HOST="localhost"
+$env:IMCHAT_DB_PORT="3306"
+$env:IMCHAT_DB_NAME="simple_chat"
+```
+
+如果你希望把自己的密文写回配置文件，可以本地生成：
+
+```powershell
+$env:IMCHAT_CONFIG_KEY="your-own-local-config-key"
+.\scripts\encrypt-config.ps1 -Key $env:IMCHAT_CONFIG_KEY -Value "your-secret"
+```
+
+然后把生成的 `ENC(...)` 替换到 `application.yml` 对应字段中。
+
+注意：
+
+- `IMCHAT_CONFIG_KEY` 只保留在本机环境中，不要提交到仓库
+- 推送到 GitHub 前，确认没有把本地账号密码写入任何配置文件
+
+### 3. 启动服务端
+
+```bash
+mvn -pl imchat-server -am spring-boot:run
+```
+
+首次启动时，Flyway 会自动完成建表；如果库中已经存在旧表结构，则会自动接管并写入 `flyway_schema_history`，避免重复执行初始化脚本。
+
+默认地址：
+
+- HTTP API：`http://127.0.0.1:8080/api`
+- WebSocket：`ws://127.0.0.1:9000/ws`
+
+### 4. Maven / 发布校验
+
+已接管数据库校验：
+
+```powershell
+$env:SPRING_DATASOURCE_USERNAME="your_db_user"
+$env:SPRING_DATASOURCE_PASSWORD="your_db_password"
+mvn -pl imchat-server -am -P release-check verify
+```
+
+空库或新环境建议先执行迁移，再做校验：
+
+```powershell
+mvn -f imchat-server/pom.xml -P release-check -Dimchat.flyway.name=your_db_name flyway:migrate
+mvn -pl imchat-server -am -P release-check -Dimchat.flyway.name=your_db_name verify
+```
+
+仓库已补充 GitHub Actions：
+
+- `.github/workflows/release-check.yml`
+
+它会在 GitHub 上自动完成：
+
+- 对空数据库执行 `flyway:migrate`
+- Maven 编译与 `flyway:validate`
+
+### 5. 启动 Electron 客户端
+
+```bash
+cd imchat-electron-client
+npm install
+npm run start
+```
+
+## 主要接口（节选）
+
+- `GET /api/auth/captcha`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/user/search?keyword=xxx`
+- `POST /api/friend/apply`
+- `GET /api/friend/apply/list`
+- `POST /api/friend/apply/handle`
+- `GET /api/friend/list`
+- `DELETE /api/friend/{friendId}`
+- `POST /api/message/send`
+- `GET /api/message/history/{friendId}`
+- `GET /api/message/conversations`
+- `POST /api/message/read/{friendId}`
+
+## 联调测试
+
+联调用例与步骤见：
+
+- `docs/integration-test.md`

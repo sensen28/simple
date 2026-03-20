@@ -5,7 +5,7 @@ import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.websocketx.*;
-import jakarta.annotation.Resource;
+import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.context.annotation.Scope;
@@ -26,12 +26,12 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<Object> {
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof FullHttpRequest request) {
+        if (msg instanceof FullHttpRequest) {
             // 处理HTTP握手请求
-            handleHttpRequest(ctx, request);
-        } else if (msg instanceof WebSocketFrame frame) {
+            handleHttpRequest(ctx, (FullHttpRequest) msg);
+        } else if (msg instanceof WebSocketFrame) {
             // 处理WebSocket帧
-            handleWebSocketFrame(ctx, frame);
+            handleWebSocketFrame(ctx, (WebSocketFrame) msg);
         }
     }
 
@@ -76,7 +76,8 @@ public class WebSocketHandler extends SimpleChannelInboundHandler<Object> {
             return;
         }
         // 二进制消息，传递给下一个处理器
-        if (frame instanceof BinaryWebSocketFrame binaryFrame) {
+        if (frame instanceof BinaryWebSocketFrame) {
+            BinaryWebSocketFrame binaryFrame = (BinaryWebSocketFrame) frame;
             ctx.fireChannelRead(binaryFrame.content().retain());
         }
     }

@@ -6,16 +6,15 @@ import com.wjh.common.domain.dto.LoginDTO;
 import com.wjh.common.domain.dto.RegisterDTO;
 import com.wjh.common.domain.vo.LoginVO;
 import com.wjh.common.utils.CaptchaUtils;
+import com.wjh.service.CaptchaStoreService;
 import com.wjh.service.UserService;
-import jakarta.annotation.Resource;
-import jakarta.validation.Valid;
+import javax.annotation.Resource;
+import javax.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 认证控制器
@@ -31,7 +30,7 @@ public class AuthController {
     private CaptchaUtils captchaUtils;
 
     @Resource
-    private StringRedisTemplate stringRedisTemplate;
+    private CaptchaStoreService captchaStoreService;
 
     @Value("${imchat.captcha-expire:5}")
     private Integer captchaExpire;
@@ -45,8 +44,8 @@ public class AuthController {
         CaptchaUtils.CaptchaInfo captchaInfo = captchaUtils.generateCaptcha();
         // 生成验证码key
         String captchaKey = IdUtil.simpleUUID();
-        // 存入Redis，有效期5分钟
-        stringRedisTemplate.opsForValue().set("captcha:" + captchaKey, captchaInfo.getCode(), captchaExpire, TimeUnit.MINUTES);
+        // 优先写入 Redis，Redis 不可用时回退到本地内存
+        captchaStoreService.save(captchaKey, captchaInfo.getCode(), captchaExpire);
 
         Map<String, String> result = new HashMap<>();
         result.put("captchaKey", captchaKey);
@@ -60,12 +59,12 @@ public class AuthController {
     @PostMapping("/register")
     public Result<Boolean> register(@Valid @RequestBody RegisterDTO registerDTO) {
         // 校验验证码
-        String cacheCode = stringRedisTemplate.opsForValue().get("captcha:" + registerDTO.getCaptchaKey());
+        String cacheCode = captchaStoreService.get(registerDTO.getCaptchaKey());
         if (cacheCode == null || !cacheCode.equalsIgnoreCase(registerDTO.getCaptcha())) {
             return Result.error("验证码错误或已过期");
         }
         // 删除验证码
-        stringRedisTemplate.delete("captcha:" + registerDTO.getCaptchaKey());
+        captchaStoreService.delete(registerDTO.getCaptchaKey());
         // 校验两次密码是否一致
         if (!registerDTO.getPassword().equals(registerDTO.getConfirmPassword())) {
             return Result.error("两次密码输入不一致");
@@ -81,12 +80,12 @@ public class AuthController {
     @PostMapping("/login")
     public Result<LoginVO> login(@Valid @RequestBody LoginDTO loginDTO) {
         // 校验验证码
-        String cacheCode = stringRedisTemplate.opsForValue().get("captcha:" + loginDTO.getCaptchaKey());
+        String cacheCode = captchaStoreService.get(loginDTO.getCaptchaKey());
         if (cacheCode == null || !cacheCode.equalsIgnoreCase(loginDTO.getCaptcha())) {
             return Result.error("验证码错误或已过期");
         }
         // 删除验证码
-        stringRedisTemplate.delete("captcha:" + loginDTO.getCaptchaKey());
+        captchaStoreService.delete(loginDTO.getCaptchaKey());
         // 登录
         LoginVO loginVO = userService.login(loginDTO);
         return loginVO != null ? Result.success("登录成功", loginVO) : Result.error("用户名或密码错误");

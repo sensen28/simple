@@ -1,21 +1,29 @@
 package com.wjh.netty.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wjh.common.domain.dto.MessageSendDTO;
 import com.wjh.common.enums.MessageTypeEnum;
 import com.wjh.common.protocol.MessageProtocol;
 import com.wjh.common.utils.JwtUtils;
 import com.wjh.entity.Message;
+import com.wjh.entity.User;
 import com.wjh.netty.ChannelManager;
+import com.wjh.service.FriendService;
 import com.wjh.service.MessageService;
+import com.wjh.service.UserService;
+import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
-import jakarta.annotation.Resource;
+import javax.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.config.ConfigurableBeanFactory;
-import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -23,6 +31,7 @@ import java.util.Map;
  */
 @Slf4j
 @Component
+@ChannelHandler.Sharable
 public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol> {
 
     @Resource
@@ -30,6 +39,12 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
 
     @Resource
     private MessageService messageService;
+
+    @Resource
+    private FriendService friendService;
+
+    @Resource
+    private UserService userService;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -62,7 +77,7 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
      * 处理认证请求
      */
     private void handleAuthRequest(ChannelHandlerContext ctx, MessageProtocol msg) throws Exception {
-        String body = new String(msg.getBody());
+        String body = new String(msg.getBody(), StandardCharsets.UTF_8);
         Map<String, String> map = objectMapper.readValue(body, Map.class);
         String token = map.get("token");
         // 验证token
@@ -71,30 +86,36 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
             String username = jwtUtils.getUsernameFromToken(token);
             // 绑定用户和通道
             ChannelManager.bindUser(userId, ctx.channel());
+            // 更新在线状态
+            userService.lambdaUpdate()
+                    .set(User::getStatus, 1)
+                    .set(User::getUpdateTime, LocalDateTime.now())
+                    .eq(User::getId, userId)
+                    .update();
             // 返回认证成功响应
             MessageProtocol response = new MessageProtocol();
             response.setMessageType(MessageTypeEnum.AUTH_RESPONSE.getCode().byteValue());
             response.setStatus((byte) 0);
-            Map<String, Object> result = Map.of(
-                    "code", 200,
-                    "msg", "认证成功",
-                    "userId", userId,
-                    "username", username
-            );
+            Map<String, Object> result = new HashMap<String, Object>();
+            result.put("code", 200);
+            result.put("msg", "认证成功");
+            result.put("userId", userId);
+            result.put("username", username);
             byte[] data = objectMapper.writeValueAsBytes(result);
             response.setLength(data.length);
             response.setBody(data);
             ctx.writeAndFlush(response);
+            // 推送离线消息
+            sendOfflineMessages(ctx, userId);
             log.info("用户{}认证成功", userId);
         } else {
             // 认证失败
             MessageProtocol response = new MessageProtocol();
             response.setMessageType(MessageTypeEnum.AUTH_RESPONSE.getCode().byteValue());
             response.setStatus((byte) 1);
-            Map<String, Object> result = Map.of(
-                    "code", 401,
-                    "msg", "token无效或已过期"
-            );
+            Map<String, Object> result = new HashMap<String, Object>();
+            result.put("code", 401);
+            result.put("msg", "token无效或已过期");
             byte[] data = objectMapper.writeValueAsBytes(result);
             response.setLength(data.length);
             response.setBody(data);
@@ -113,58 +134,52 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
             log.warn("用户未认证，无法发送消息: {}", ctx.channel().id());
             return;
         }
-        String body = new String(msg.getBody());
+        String body = new String(msg.getBody(), StandardCharsets.UTF_8);
         Map<String, Object> map = objectMapper.readValue(body, Map.class);
-        Long toUserId = Long.valueOf(map.get("toUserId").toString());
-        String content = map.get("content").toString();
-        Integer type = (Integer) map.getOrDefault("type", 1);
-        // 保存消息到数据库
-        Message message = new Message();
-        message.setFromUserId(userId);
-        message.setToUserId(toUserId);
-        message.setContent(content);
-        message.setType(type);
-        message.setStatus(0);
-        message.setIsEncrypted(1);
-        message.setCreateTime(LocalDateTime.now());
-        messageService.save(message);
-        // 转发给目标用户
+        Long toUserId = parseLong(map.get("toUserId"));
+        String content = map.get("content") == null ? "" : map.get("content").toString();
+        Integer type = parseInt(map.get("type"), 1);
+        if (toUserId == null) {
+            sendAck(ctx, null, 400, "接收用户ID不能为空");
+            return;
+        }
+        if (!StringUtils.hasText(content)) {
+            sendAck(ctx, null, 400, "消息内容不能为空");
+            return;
+        }
+        if (!friendService.isFriend(userId, toUserId)) {
+            sendAck(ctx, null, 400, "对方不是你的好友，无法发送消息");
+            return;
+        }
+
+        MessageSendDTO sendDTO = new MessageSendDTO();
+        sendDTO.setToUserId(toUserId);
+        sendDTO.setContent(content);
+        sendDTO.setType(type);
+        Message message = messageService.savePrivateMessage(userId, sendDTO);
+
         MessageProtocol forwardMsg = new MessageProtocol();
         forwardMsg.setMessageType(MessageTypeEnum.PRIVATE_MESSAGE.getCode().byteValue());
         forwardMsg.setStatus((byte) 0);
-        Map<String, Object> result = Map.of(
-                "msgId", message.getId(),
-                "fromUserId", userId,
-                "toUserId", toUserId,
-                "content", content,
-                "type", type,
-                "timestamp", System.currentTimeMillis()
-        );
+        Map<String, Object> result = new HashMap<String, Object>();
+        result.put("msgId", message.getId());
+        result.put("fromUserId", userId);
+        result.put("toUserId", toUserId);
+        result.put("content", content);
+        result.put("type", type);
+        result.put("timestamp", System.currentTimeMillis());
         byte[] data = objectMapper.writeValueAsBytes(result);
         forwardMsg.setLength(data.length);
         forwardMsg.setBody(data);
         // 检查用户是否在线
         if (ChannelManager.isOnline(toUserId)) {
             ChannelManager.sendToUser(toUserId, forwardMsg);
-            // 更新消息状态为已发送
-            message.setStatus(1);
-            messageService.updateById(message);
-            log.info("消息已转发给用户{}", toUserId);
+            log.info("消息实时转发成功，toUserId={}", toUserId);
         } else {
             log.info("用户{}不在线，消息已存入离线队列", toUserId);
         }
         // 返回ACK给发送者
-        MessageProtocol ack = new MessageProtocol();
-        ack.setMessageType(MessageTypeEnum.MESSAGE_ACK.getCode().byteValue());
-        ack.setStatus((byte) 0);
-        Map<String, Object> ackResult = Map.of(
-                "msgId", message.getId(),
-                "status", 1
-        );
-        byte[] ackData = objectMapper.writeValueAsBytes(ackResult);
-        ack.setLength(ackData.length);
-        ack.setBody(ackData);
-        ctx.writeAndFlush(ack);
+        sendAck(ctx, message.getId(), 200, "发送成功");
     }
 
     /**
@@ -179,15 +194,19 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
      * 处理消息ACK
      */
     private void handleMessageAck(ChannelHandlerContext ctx, MessageProtocol msg) throws Exception {
-        String body = new String(msg.getBody());
+        Long userId = ChannelManager.getUserIdByChannel(ctx.channel());
+        if (userId == null) {
+            return;
+        }
+        String body = new String(msg.getBody(), StandardCharsets.UTF_8);
         Map<String, Object> map = objectMapper.readValue(body, Map.class);
-        Long msgId = Long.valueOf(map.get("msgId").toString());
+        Long msgId = parseLong(map.get("msgId"));
+        if (msgId == null) {
+            return;
+        }
         // 更新消息状态为已读
-        messageService.lambdaUpdate()
-                .set(Message::getStatus, 1)
-                .eq(Message::getId, msgId)
-                .update();
-        log.info("消息{}已确认", msgId);
+        messageService.markReadByMsgId(userId, msgId);
+        log.info("消息{}已被用户{}确认", msgId, userId);
     }
 
     @Override
@@ -198,7 +217,15 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        Long userId = ChannelManager.getUserIdByChannel(ctx.channel());
         ChannelManager.removeChannel(ctx.channel());
+        if (userId != null) {
+            userService.lambdaUpdate()
+                    .set(User::getStatus, 0)
+                    .set(User::getUpdateTime, LocalDateTime.now())
+                    .eq(User::getId, userId)
+                    .update();
+        }
         super.channelInactive(ctx);
     }
 
@@ -207,5 +234,73 @@ public class MessageHandler extends SimpleChannelInboundHandler<MessageProtocol>
         log.error("消息处理异常: {}", cause.getMessage(), cause);
         ChannelManager.removeChannel(ctx.channel());
         ctx.close();
+    }
+
+    private void sendOfflineMessages(ChannelHandlerContext ctx, Long userId) throws Exception {
+        List<Message> offlineMessages = messageService.listOfflineMessages(userId, 200);
+        if (offlineMessages.isEmpty()) {
+            return;
+        }
+        for (Message message : offlineMessages) {
+            MessageProtocol protocol = new MessageProtocol();
+            protocol.setMessageType(MessageTypeEnum.PRIVATE_MESSAGE.getCode().byteValue());
+            protocol.setStatus((byte) 0);
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("msgId", message.getId());
+            payload.put("fromUserId", message.getFromUserId());
+            payload.put("toUserId", message.getToUserId());
+            payload.put("content", message.getContent());
+            payload.put("type", message.getType());
+            payload.put("timestamp", message.getCreateTime() == null
+                    ? System.currentTimeMillis()
+                    : message.getCreateTime().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+            payload.put("offline", true);
+            byte[] body = objectMapper.writeValueAsBytes(payload);
+            protocol.setLength(body.length);
+            protocol.setBody(body);
+            ctx.writeAndFlush(protocol);
+        }
+    }
+
+    private void sendAck(ChannelHandlerContext ctx, Long msgId, Integer code, String msg) throws Exception {
+        MessageProtocol ack = new MessageProtocol();
+        ack.setMessageType(MessageTypeEnum.MESSAGE_ACK.getCode().byteValue());
+        ack.setStatus((byte) (code != null && code == 200 ? 0 : 1));
+        Map<String, Object> ackResult = new HashMap<>();
+        ackResult.put("msgId", msgId);
+        ackResult.put("code", code);
+        ackResult.put("msg", msg);
+        byte[] ackData = objectMapper.writeValueAsBytes(ackResult);
+        ack.setLength(ackData.length);
+        ack.setBody(ackData);
+        ctx.writeAndFlush(ack);
+    }
+
+    private Long parseLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Integer parseInt(Object value, Integer defaultValue) {
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
     }
 }

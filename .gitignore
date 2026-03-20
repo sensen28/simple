@@ -27,6 +27,7 @@ Thumbs.db
 # Logs
 logs/
 *.log
+.runtime/
 
 # Database
 *.db
@@ -35,6 +36,17 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+.env
+.env.*
+local-secrets.ps1
+
+# Node / Electron
+node_modules/
+dist/
+*.asar
+
+# Local secret config
+imchat-server/src/main/resources/application-local.yml
 
 # Claude Code
 .claude/

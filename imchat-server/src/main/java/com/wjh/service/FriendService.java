@@ -3,6 +3,7 @@ package com.wjh.service;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.wjh.common.domain.dto.FriendApplyDTO;
 import com.wjh.common.domain.dto.FriendApplyHandleDTO;
+import com.wjh.common.domain.vo.FriendApplyVO;
 import com.wjh.common.domain.vo.FriendVO;
 import com.wjh.entity.Friend;
 
@@ -28,6 +29,14 @@ public interface FriendService extends IService<Friend> {
      * @return 是否成功
      */
     boolean handleFriendApply(Long targetUserId, FriendApplyHandleDTO handleDTO);
+
+    /**
+     * 获取好友申请列表
+     * @param targetUserId 目标用户ID
+     * @param status 申请状态（可为空）
+     * @return 好友申请列表
+     */
+    List<FriendApplyVO> getFriendApplyList(Long targetUserId, Integer status);
 
     /**
      * 获取好友列表

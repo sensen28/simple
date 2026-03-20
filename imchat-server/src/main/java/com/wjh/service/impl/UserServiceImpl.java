@@ -5,15 +5,20 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wjh.common.domain.dto.LoginDTO;
 import com.wjh.common.domain.dto.RegisterDTO;
 import com.wjh.common.domain.vo.LoginVO;
+import com.wjh.common.domain.vo.UserSearchVO;
 import com.wjh.common.utils.JwtUtils;
 import com.wjh.entity.User;
 import com.wjh.mapper.UserMapper;
 import com.wjh.service.UserService;
-import jakarta.annotation.Resource;
+import javax.annotation.Resource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 用户服务实现类
@@ -79,5 +84,31 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(User::getUsername, username);
         return getOne(queryWrapper);
+    }
+
+    @Override
+    public List<UserSearchVO> searchUsers(String keyword, Long excludeUserId) {
+        if (!StringUtils.hasText(keyword)) {
+            return new ArrayList<>();
+        }
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.like(User::getUsername, keyword)
+                .or()
+                .like(User::getNickname, keyword)
+                .last("limit 20");
+        List<User> users = list(queryWrapper);
+        return users.stream()
+                .filter(user -> excludeUserId == null || !excludeUserId.equals(user.getId()))
+                .map(user -> {
+                    UserSearchVO vo = new UserSearchVO();
+                    vo.setUserId(user.getId());
+                    vo.setUsername(user.getUsername());
+                    vo.setNickname(user.getNickname());
+                    vo.setAvatar(user.getAvatar());
+                    vo.setSignature(user.getSignature());
+                    vo.setStatus(user.getStatus());
+                    return vo;
+                })
+                .collect(Collectors.toList());
     }
 }

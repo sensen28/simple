@@ -1,6 +1,6 @@
 package com.wjh.common.domain.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import javax.validation.constraints.NotBlank;
 import lombok.Data;
 
 /**

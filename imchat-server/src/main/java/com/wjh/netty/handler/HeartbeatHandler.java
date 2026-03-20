@@ -27,7 +27,8 @@ public class HeartbeatHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
-        if (evt instanceof IdleStateEvent event) {
+        if (evt instanceof IdleStateEvent) {
+            IdleStateEvent event = (IdleStateEvent) evt;
             if (event.state() == IdleState.READER_IDLE) {
                 // 读空闲，心跳丢失
                 lossCount++;
@@ -44,7 +45,8 @@ public class HeartbeatHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        if (msg instanceof MessageProtocol message) {
+        if (msg instanceof MessageProtocol) {
+            MessageProtocol message = (MessageProtocol) msg;
             if (message.getMessageType().equals(MessageTypeEnum.HEARTBEAT_REQUEST.getCode().byteValue())) {
                 // 心跳请求，响应心跳
                 MessageProtocol response = new MessageProtocol();

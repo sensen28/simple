@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,7 +53,7 @@ public class JwtUtils {
      * 创建token
      */
     private String createToken(Map<String, Object> claims, Long expireTime) {
-        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        SecretKey key = buildSecretKey();
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(new Date())
@@ -94,11 +95,24 @@ public class JwtUtils {
      * 解析token
      */
     private Claims parseToken(String token) {
-        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        SecretKey key = buildSecretKey();
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
+    }
+
+    private SecretKey buildSecretKey() {
+        try {
+            byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+            if (secretBytes.length < 32) {
+                // 对较短的本地密钥做一次摘要扩展，避免在运行时因长度不足抛错。
+                secretBytes = MessageDigest.getInstance("SHA-256").digest(secretBytes);
+            }
+            return Keys.hmacShaKeyFor(secretBytes);
+        } catch (Exception e) {
+            throw new IllegalStateException("JWT 密钥初始化失败", e);
+        }
     }
 }

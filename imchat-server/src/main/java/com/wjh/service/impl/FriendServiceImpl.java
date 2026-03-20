@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wjh.common.domain.dto.FriendApplyDTO;
 import com.wjh.common.domain.dto.FriendApplyHandleDTO;
+import com.wjh.common.domain.vo.FriendApplyVO;
 import com.wjh.common.domain.vo.FriendVO;
+import com.wjh.common.enums.MessageTypeEnum;
 import com.wjh.entity.Friend;
 import com.wjh.entity.FriendApply;
 import com.wjh.entity.User;
@@ -12,13 +14,17 @@ import com.wjh.mapper.FriendMapper;
 import com.wjh.service.FriendApplyService;
 import com.wjh.service.FriendService;
 import com.wjh.service.UserService;
-import jakarta.annotation.Resource;
+import com.wjh.service.WsPushService;
+import javax.annotation.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +38,9 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private WsPushService wsPushService;
 
     @Override
     public boolean applyFriend(Long applyUserId, FriendApplyDTO applyDTO) {
@@ -55,12 +64,20 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         FriendApply apply = new FriendApply();
         apply.setApplyUserId(applyUserId);
         apply.setTargetUserId(applyDTO.getTargetUserId());
-        apply.setRemark(applyDTO.getRemark());
+        apply.setRemark(StringUtils.hasText(applyDTO.getRemark()) ? applyDTO.getRemark().trim() : "");
         apply.setStatus(0);
         apply.setCreateTime(LocalDateTime.now());
         apply.setUpdateTime(LocalDateTime.now());
         boolean save = friendApplyService.save(apply);
-        // TODO 发送通知给目标用户
+        if (save) {
+            wsPushService.push(applyDTO.getTargetUserId(), MessageTypeEnum.FRIEND_APPLY_NOTICE, mapOf(
+                    "applyId", apply.getId(),
+                    "applyUserId", applyUserId,
+                    "targetUserId", applyDTO.getTargetUserId(),
+                    "remark", apply.getRemark(),
+                    "status", 0
+            ));
+        }
         return save;
     }
 
@@ -84,27 +101,71 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         apply.setStatus(handleDTO.getOperateType());
         apply.setUpdateTime(LocalDateTime.now());
         friendApplyService.updateById(apply);
+        User applyUser = userService.getById(apply.getApplyUserId());
+        User targetUser = userService.getById(targetUserId);
         // 同意申请，添加双向好友关系
         if (handleDTO.getOperateType() == 1) {
-            // 添加申请人到目标用户的好友列表
-            Friend friend1 = new Friend();
-            friend1.setUserId(targetUserId);
-            friend1.setFriendId(apply.getApplyUserId());
-            friend1.setStatus(1);
-            friend1.setIsMute(0);
-            friend1.setCreateTime(LocalDateTime.now());
-            save(friend1);
-            // 添加目标用户到申请人的好友列表
-            Friend friend2 = new Friend();
-            friend2.setUserId(apply.getApplyUserId());
-            friend2.setFriendId(targetUserId);
-            friend2.setStatus(1);
-            friend2.setIsMute(0);
-            friend2.setCreateTime(LocalDateTime.now());
-            save(friend2);
-            // TODO 发送通知给申请人
+            ensureFriendRelation(targetUserId, apply.getApplyUserId());
+            ensureFriendRelation(apply.getApplyUserId(), targetUserId);
+        }
+        wsPushService.push(apply.getApplyUserId(), MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                "event", "FRIEND_APPLY_HANDLE",
+                "applyId", apply.getId(),
+                "operateType", handleDTO.getOperateType(),
+                "targetUser", userMap(targetUser)
+        ));
+        wsPushService.push(targetUserId, MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                "event", "FRIEND_APPLY_HANDLE",
+                "applyId", apply.getId(),
+                "operateType", handleDTO.getOperateType(),
+                "applyUser", userMap(applyUser)
+        ));
+        if (handleDTO.getOperateType() == 1) {
+            wsPushService.push(apply.getApplyUserId(), MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                    "event", "FRIEND_ADDED",
+                    "friend", userMap(targetUser)
+            ));
+            wsPushService.push(targetUserId, MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                    "event", "FRIEND_ADDED",
+                    "friend", userMap(applyUser)
+            ));
         }
         return true;
+    }
+
+    @Override
+    public List<FriendApplyVO> getFriendApplyList(Long targetUserId, Integer status) {
+        LambdaQueryWrapper<FriendApply> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(FriendApply::getTargetUserId, targetUserId)
+                .orderByDesc(FriendApply::getCreateTime);
+        if (status != null) {
+            queryWrapper.eq(FriendApply::getStatus, status);
+        }
+        List<FriendApply> applies = friendApplyService.list(queryWrapper);
+        if (applies.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Long> applyUserIds = applies.stream()
+                .map(FriendApply::getApplyUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<Long, User> userMap = userService.listByIds(applyUserIds).stream()
+                .collect(Collectors.toMap(User::getId, user -> user));
+        return applies.stream().map(apply -> {
+            FriendApplyVO vo = new FriendApplyVO();
+            vo.setApplyId(apply.getId());
+            vo.setApplyUserId(apply.getApplyUserId());
+            User user = userMap.get(apply.getApplyUserId());
+            if (user != null) {
+                vo.setApplyUsername(user.getUsername());
+                vo.setApplyNickname(user.getNickname());
+                vo.setApplyAvatar(user.getAvatar());
+            }
+            vo.setRemark(apply.getRemark());
+            vo.setStatus(apply.getStatus());
+            vo.setCreateTime(apply.getCreateTime());
+            return vo;
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -152,6 +213,10 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
         wrapper2.eq(Friend::getUserId, friendId)
                 .eq(Friend::getFriendId, userId);
         remove(wrapper2);
+        wsPushService.push(friendId, MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                "event", "FRIEND_DELETED",
+                "friendId", userId
+        ));
         return true;
     }
 
@@ -165,7 +230,15 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
             throw new RuntimeException("好友不存在");
         }
         friend.setStatus(status);
-        return updateById(friend);
+        boolean updated = updateById(friend);
+        if (updated) {
+            wsPushService.push(friendId, MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                    "event", "FRIEND_BLOCK_UPDATED",
+                    "operatorId", userId,
+                    "status", status
+            ));
+        }
+        return updated;
     }
 
     @Override
@@ -178,7 +251,15 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
             throw new RuntimeException("好友不存在");
         }
         friend.setIsMute(isMute);
-        return updateById(friend);
+        boolean updated = updateById(friend);
+        if (updated) {
+            wsPushService.push(userId, MessageTypeEnum.FRIEND_STATUS_NOTICE, mapOf(
+                    "event", "FRIEND_MUTE_UPDATED",
+                    "friendId", friendId,
+                    "isMute", isMute
+            ));
+        }
+        return updated;
     }
 
     @Override
@@ -188,5 +269,46 @@ public class FriendServiceImpl extends ServiceImpl<FriendMapper, Friend> impleme
                 .eq(Friend::getFriendId, friendId)
                 .eq(Friend::getStatus, 1);
         return count(queryWrapper) > 0;
+    }
+
+    private void ensureFriendRelation(Long userId, Long friendId) {
+        LambdaQueryWrapper<Friend> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Friend::getUserId, userId)
+                .eq(Friend::getFriendId, friendId);
+        Friend relation = getOne(queryWrapper);
+        if (relation != null) {
+            relation.setStatus(1);
+            relation.setIsMute(relation.getIsMute() == null ? 0 : relation.getIsMute());
+            updateById(relation);
+            return;
+        }
+        Friend friend = new Friend();
+        friend.setUserId(userId);
+        friend.setFriendId(friendId);
+        friend.setStatus(1);
+        friend.setIsMute(0);
+        friend.setCreateTime(LocalDateTime.now());
+        save(friend);
+    }
+
+    private Map<String, Object> userMap(User user) {
+        Map<String, Object> result = new HashMap<>();
+        if (user == null) {
+            return result;
+        }
+        result.put("userId", user.getId());
+        result.put("username", user.getUsername());
+        result.put("nickname", user.getNickname());
+        result.put("avatar", user.getAvatar());
+        result.put("status", user.getStatus());
+        return result;
+    }
+
+    private Map<String, Object> mapOf(Object... keyValues) {
+        Map<String, Object> map = new HashMap<String, Object>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            map.put(String.valueOf(keyValues[i]), keyValues[i + 1]);
+        }
+        return map;
     }
 }
