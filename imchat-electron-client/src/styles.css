@@ -240,8 +240,12 @@ textarea:focus {
 
 .hint-text {
   margin: 0;
-  color: var(--text-soft);
+  color: var(--accent-warm);
   font-size: 12px;
+  padding: 6px 12px;
+  background: rgba(217, 179, 108, 0.12);
+  border-radius: 8px;
+  border: 1px solid rgba(217, 179, 108, 0.22);
 }
 
 .content-grid {
@@ -294,6 +298,43 @@ textarea:focus {
   place-items: center;
   font-weight: 800;
   color: #04101d;
+  position: relative;
+}
+
+.avatar-token.small {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  border: 2px solid var(--bg-02);
+}
+
+.status-dot.online {
+  background: #4ade80;
+}
+
+.status-dot.offline {
+  background: #94a3b8;
+}
+
+.unread-badge {
+  background: var(--danger);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
 }
 
 .nickname {
@@ -313,7 +354,7 @@ textarea:focus {
 
 .list {
   min-height: 64px;
-  max-height: 240px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -322,7 +363,16 @@ textarea:focus {
 }
 
 .compact-list {
+  flex: 0 1 auto;
   max-height: 130px;
+}
+
+.friend-list {
+  max-height: 280px;
+}
+
+.conversation-list {
+  max-height: 220px;
 }
 
 .chat-header {
@@ -350,24 +400,41 @@ textarea:focus {
   padding: 9px 12px;
   border: 1px solid transparent;
   font-size: 13px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .message.inbound {
   align-self: flex-start;
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.15);
+  border-bottom-left-radius: 4px;
 }
 
 .message.outbound {
   align-self: flex-end;
   background: rgba(101, 209, 255, 0.2);
   border-color: rgba(101, 209, 255, 0.42);
+  border-bottom-right-radius: 4px;
+}
+
+.message-sender {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.message-content {
+  line-height: 1.5;
 }
 
 .message-time {
   margin-top: 4px;
   font-size: 11px;
   color: var(--text-soft);
+  align-self: flex-end;
 }
 
 .composer {

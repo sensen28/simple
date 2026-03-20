@@ -80,6 +80,15 @@ function bindEvents() {
   dom.markReadBtn.addEventListener("click", markCurrentConversationRead);
   dom.refreshAllBtn.addEventListener("click", refreshAllData);
   dom.logoutBtn.addEventListener("click", logout);
+
+  // 回车发送消息，Ctrl+回车换行
+  dom.messageInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.ctrlKey) {
+      e.preventDefault();
+      sendCurrentMessage();
+    }
+  });
+
   setAuthMode("login");
 }
 
@@ -162,6 +171,11 @@ async function onLogin() {
 
     connectWebSocket();
     await refreshAllData();
+
+    // 自动打开第一个好友的聊天
+    if (state.friends.length > 0) {
+      openFriendChat(state.friends[0].friendId);
+    }
   } catch (error) {
     showAuthMessage(error.message, true);
     await refreshCaptcha();
@@ -344,12 +358,18 @@ function renderFriendList() {
   state.friends.forEach((friend) => {
     const item = document.createElement("button");
     item.className = `list-item ${state.currentFriendId === friend.friendId ? "active" : ""}`;
+    const avatarText = (friend.nickname || friend.username || "U").slice(0, 2).toUpperCase();
     item.innerHTML = `
-      <div>
-        <div class="item-name">${escapeHtml(friend.nickname || friend.username)}</div>
-        <div class="item-sub">@${escapeHtml(friend.username || "")}</div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="avatar-token small">
+          ${avatarText}
+          <div class="status-dot ${friend.status === 1 ? "online" : "offline"}"></div>
+        </div>
+        <div>
+          <div class="item-name">${escapeHtml(friend.nickname || friend.username)}</div>
+          <div class="item-sub">@${escapeHtml(friend.username || "")}</div>
+        </div>
       </div>
-      <div class="item-sub">${friend.status === 1 ? "在线" : "离线"}</div>
     `;
     item.addEventListener("click", () => openFriendChat(friend.friendId));
     dom.friendList.appendChild(item);
@@ -385,8 +405,18 @@ function renderMessages(friendId) {
     const inbound = Number(msg.fromUserId) !== state.self.userId;
     const node = document.createElement("div");
     node.className = `message ${inbound ? "inbound" : "outbound"}`;
+
+    let senderName = "";
+    if (inbound) {
+      const friend = state.friends.find(f => f.friendId === Number(msg.fromUserId));
+      senderName = friend ? friend.nickname || friend.username : "对方";
+    } else {
+      senderName = state.self.nickname || state.self.username;
+    }
+
     node.innerHTML = `
-      <div>${escapeHtml(msg.content || "")}</div>
+      <div class="message-sender">${escapeHtml(senderName)}</div>
+      <div class="message-content">${escapeHtml(msg.content || "")}</div>
       <div class="message-time">${formatTime(msg.createTime)}</div>
     `;
     dom.messageList.appendChild(node);
@@ -553,7 +583,7 @@ async function refreshConversations() {
           <div class="item-name">${escapeHtml(conversation.friendNickname || conversation.friendUsername || "未知用户")}</div>
           <div class="item-sub">${escapeHtml(conversation.lastContent || "")}</div>
         </div>
-        <div class="item-sub">${conversation.unreadCount > 0 ? `${conversation.unreadCount} 未读` : "已读"}</div>
+        ${conversation.unreadCount > 0 ? `<div class="unread-badge">${conversation.unreadCount}</div>` : `<div class="item-sub">已读</div>`}
       `;
       item.addEventListener("click", () => openFriendChat(conversation.friendId));
       dom.conversationList.appendChild(item);
