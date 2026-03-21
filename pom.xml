@@ -37,7 +37,7 @@
         <jackson-bom.version>2.18.6</jackson-bom.version>
         <log4j2.version>2.25.3</log4j2.version>
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
-        <jjwt.version>0.11.5</jjwt.version>
+        <jjwt.version>0.13.0</jjwt.version>
         <hutool.version>5.8.25</hutool.version>
         <mysql.version>8.4.0</mysql.version>
         <netty.version>4.1.131.Final</netty.version>
