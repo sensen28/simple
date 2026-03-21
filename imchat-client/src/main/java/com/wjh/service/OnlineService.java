@@ -10,7 +10,7 @@ import io.netty.channel.Channel;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import com.sun.org.apache.xml.internal.security.utils.Base64;
+import java.util.Base64;
 import java.util.Hashtable;
 import java.util.Scanner;
 
@@ -144,7 +144,7 @@ public class OnlineService {
             byte[] bytes = new byte[available];
             fileInputStream.read(bytes);
 
-            String file = Base64.encode(bytes,Base64.BASE64DEFAULTLENGTH);
+            String file = Base64.getEncoder().encodeToString(bytes);
 
             //获取文件名
             int index = path.lastIndexOf("\\");
@@ -185,7 +185,7 @@ public class OnlineService {
             fileInputStream.read(bytes);
 
             //将byte数组序列化然后发送
-            String file = Base64.encode(bytes,Base64.BASE64DEFAULTLENGTH);
+            String file = Base64.getEncoder().encodeToString(bytes);
 
             //获取文件名
             int index = path.lastIndexOf("\\");

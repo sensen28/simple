@@ -2,7 +2,6 @@ package com.wjh.controller;
 
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.sun.org.apache.xml.internal.security.exceptions.Base64DecodingException;
 import com.wjh.bean.ChatClientFrame;
 import com.wjh.bean.FriendListFrame;
 import com.wjh.bean.GroupChatFrame;
@@ -17,7 +16,7 @@ import javax.swing.*;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import com.sun.org.apache.xml.internal.security.utils.Base64;
+import java.util.Base64;
 import java.util.Hashtable;
 
 
@@ -73,7 +72,7 @@ public class ClientController {
         String fileName = objectNode.get("fileName").asText();
         try {
             String string = objectNode.get("file").asText();
-            byte[] decode = Base64.decode(string);
+            byte[] decode = Base64.getDecoder().decode(string);
             File file = new File(FrameSize.DEFAULT_FILE_PATH+fileName);
             file.createNewFile();
             if(file.exists()){
@@ -85,8 +84,6 @@ public class ClientController {
             fileOutputStream.write(decode);
             JOptionPane.showMessageDialog(null,"接收到来自"+sender+"的文件，已存放至"+FrameSize.DEFAULT_FILE_PATH);
         } catch (IOException e) {
-            e.printStackTrace();
-        } catch (Base64DecodingException e) {
             e.printStackTrace();
         }
     }
