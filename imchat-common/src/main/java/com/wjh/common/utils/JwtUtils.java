@@ -96,7 +96,7 @@ public class JwtUtils {
      */
     private Claims parseToken(String token) {
         SecretKey key = buildSecretKey();
-        return Jwts.parserBuilder()
+        return Jwts.parser()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
